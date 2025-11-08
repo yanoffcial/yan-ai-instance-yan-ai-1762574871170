@@ -1,0 +1,318 @@
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YAN AI - YAN AI Instance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="importmap">
+        { "imports": { "@google/genai": "https://aistudiocdn.com/@google/genai@^1.27.0" } }
+    </script>
+    <style>
+        body {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow: hidden;
+            background-color: #111015;
+        }
+        @keyframes aurora {
+            from { background-position: 50% 50%, 50% 50%; }
+            to { background-position: 350% 50%, 350% 50%; }
+        }
+        .aurora-bg::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background-image: radial-gradient(ellipse at 20% 40%, rgba(99, 102, 241, 0.3) 0%, transparent 70%), radial-gradient(ellipse at 80% 60%, rgba(168, 85, 247, 0.2) 0%, transparent 70%);
+            background-size: 150% 150%;
+            animation: aurora 16s linear infinite alternate;
+            z-index: -1; opacity: 0.6;
+        }
+        .tool-bg::before {
+            content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-image: radial-gradient(circle at 15% 25%, rgba(99, 102, 241, 0.12) 0%, transparent 40%), radial-gradient(circle at 85% 75%, rgba(168, 85, 247, 0.08) 0%, transparent 40%);
+            animation: aurora 20s linear infinite alternate; z-index: -1;
+        }
+        @keyframes bubbleIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        .animate-bubbleIn { animation: bubbleIn 0.35s cubic-bezier(0.23, 1, 0.32, 1) forwards; }
+        .chat-avatar-user { background: linear-gradient(135deg, #5a5a6e 0%, #3f3f46 100%); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .chat-avatar-model { background: linear-gradient(135deg, #3730a3 0%, #27272a 100%); border: 1px solid rgba(99, 102, 241, 0.2); }
+        @keyframes response-glow {
+            0% { border-color: rgba(99, 102, 241, 0.4); box-shadow: 0 0 10px rgba(99, 102, 241, 0.15); }
+            50% { border-color: rgba(129, 140, 248, 0.7); box-shadow: 0 0 18px rgba(129, 140, 248, 0.3); }
+            100% { border-color: rgba(99, 102, 241, 0.4); box-shadow: 0 0 10px rgba(99, 102, 241, 0.15); }
+        }
+        .model-response-glowing { border: 1px solid transparent; animation: response-glow 2.5s infinite; }
+        .typing-cursor::after { content: '▋'; display: inline-block; animation: blink-caret 1s ease-in-out infinite; margin-left: 2px; color: #a7a7a7; }
+        @keyframes blink-caret { from, to { opacity: 1; } 50% { opacity: 0; } }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+    <div id="root"></div>
+
+    <script id="instance-config" type="application/json">
+        {
+  "instanceName": "YAN AI",
+  "users": [
+    {
+      "id": "1",
+      "username": "Y",
+      "passwordHash": "MQ=="
+    },
+    {
+      "id": "1762574856347",
+      "username": "Y",
+      "passwordHash": "MQ=="
+    },
+    {
+      "id": "1762574857507",
+      "username": "Y",
+      "passwordHash": "Mw=="
+    }
+  ]
+}
+    </script>
+
+    <script type="text/babel" data-type="module">
+        import { GoogleGenAI } from "@google/genai";
+
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // --- COMPONENTS ---
+        const Icon = ({ name, ...props }) => {
+            const getIconPath = (iconName) => {
+                switch (iconName) {
+                    case 'logo': return <path d="M12.65,2.61L12.65,2.61c-0.34-0.34-0.89-0.34-1.23,0L2.61,11.42c-0.34,0.34-0.34,0.89,0,1.23l0,0c0.34,0.34,0.89,0.34,1.23,0l8.81-8.81C13,3.5,13,2.95,12.65,2.61z M11.42,2.61L2.61,11.42c-0.34,0.34-0.34,0.89,0,1.23l8.81,8.81c0.34,0.34,0.89,0.34,1.23,0l8.81-8.81c0.34-0.34,0.34,0.89,0-1.23L12.65,2.61c-0.34-0.34-0.89-0.34-1.23,0H11.42z M21.39,11.42L12.58,2.61c-0.34-0.34-0.89-0.34-1.23,0l-8.81,8.81c-0.34,0.34-0.34,0.89,0,1.23l8.81,8.81c0.34,0.34,0.89,0.34,1.23,0L21.39,12.65c0.34-0.34,0.34,0.89,0-1.23L21.39,11.42z" fill="currentColor"/>;
+                    case 'send': return <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />;
+                    case 'close': return <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />;
+                    case 'spinner': return <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.291m0 13.418V21M6.343 6.343l1.62 1.62m9.414 9.414l1.62 1.62M3 12h2.291m13.418 0H21M6.343 17.657l1.62-1.62m9.414-9.414l1.62-1.62" />;
+                    default: return null;
+                }
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} {...props}>
+                    {getIconPath(name)}
+                </svg>
+            );
+        };
+        
+        const Spinner = ({ text }) => (
+            <div className="flex flex-col items-center justify-center space-y-2">
+                <Icon name="spinner" className="h-8 w-8 animate-spin text-indigo-400" />
+                {text && <p className="text-zinc-400">{text}</p>}
+            </div>
+        );
+
+        const useSmoothTyping = (targetText, speed = 20) => {
+            const [displayedText, setDisplayedText] = useState('');
+            const animationFrameRef = useRef();
+
+            useEffect(() => {
+                let currentIndex = 0;
+                const animate = () => {
+                    if (currentIndex < targetText.length) {
+                        setDisplayedText(targetText.substring(0, currentIndex + 1));
+                        currentIndex++;
+                        animationFrameRef.current = setTimeout(animate, speed);
+                    }
+                };
+                animate();
+                return () => clearTimeout(animationFrameRef.current);
+            }, [targetText, speed]);
+
+            const isTyping = displayedText.length < targetText.length;
+            return { displayedText, isTyping };
+        };
+
+        const ModelMessageBody = ({ content, isStreaming }) => {
+            if (!isStreaming) return <p>{content}</p>;
+            const { displayedText, isTyping } = useSmoothTyping(content, 15);
+            return <p>{displayedText}{isTyping && <span className="typing-cursor" />}</p>;
+        };
+
+        const LoginPage = ({ instance, onLogin }) => {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const user = instance.users.find(u => u.username === username);
+                if (user && atob(user.passwordHash) === password) {
+                    onLogin(user);
+                } else {
+                    setError('Invalid username or password.');
+                }
+            };
+            
+            return (
+                <div className="h-screen w-screen flex flex-col items-center justify-center aurora-bg relative">
+                    <div className="w-full max-w-sm p-8 bg-zinc-900/50 backdrop-blur-md rounded-2xl border border-zinc-700 text-center">
+                        <Icon name="logo" className="w-12 h-12 mx-auto mb-4 text-indigo-400"/>
+                        <h1 className="text-2xl font-bold text-white mb-2">{instance.instanceName}</h1>
+                        <p className="text-zinc-400 mb-6">Powered by YAN AI</p>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                             <div><input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" className="w-full p-3 bg-zinc-800 rounded-lg border border-zinc-700 text-center" required /></div>
+                             <div><input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" className="w-full p-3 bg-zinc-800 rounded-lg border border-zinc-700 text-center" required /></div>
+                            {error && <p className="text-red-400 text-sm">{error}</p>}
+                            <button type="submit" className="w-full p-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-500">Login</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+        
+        const ChatPage = ({ instance, user, onLogout }) => {
+            const [messages, setMessages] = useState([]);
+            const [input, setInput] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [chat, setChat] = useState(null);
+            const messagesEndRef = useRef(null);
+
+            useEffect(() => {
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                const model = ai.chats.create({ 
+                    model: 'gemini-2.5-flash',
+                    config: {
+                        systemInstruction: `You are YAN AI, a helpful assistant. You are currently operating inside a private instance named "${instance.instanceName}". The current user is "${user.username}".`
+                    }
+                });
+                setChat(model);
+            }, []);
+            
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
+
+            const handleSendMessage = async (e) => {
+                e.preventDefault();
+                if (!input.trim() || isLoading || !chat) return;
+
+                const userMessage = { role: 'user', parts: [{ text: input }] };
+                const newMessages = [...messages, userMessage];
+                setMessages(newMessages);
+                
+                const currentInput = input;
+                setInput('');
+                setIsLoading(true);
+
+                try {
+                    const response = await chat.sendMessageStream({ message: currentInput });
+                    let isFirstChunk = true;
+                    let modelResponseText = '';
+                    
+                    for await (const chunk of response) {
+                        modelResponseText += chunk.text;
+                        if (isFirstChunk) {
+                            const newModelMessage = { role: 'model', parts: [{ text: modelResponseText }] };
+                            setMessages([...newMessages, newModelMessage]);
+                            isFirstChunk = false;
+                        } else {
+                            setMessages(prev => {
+                                const updated = [...prev];
+                                if (updated.length > 0 && updated[updated.length - 1].role === 'model') {
+                                    updated[updated.length - 1].parts[0].text = modelResponseText;
+                                }
+                                return updated;
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error(error);
+                    const errorMessage = { role: 'model', parts: [{ text: `Error: ${error.message}` }] };
+                    setMessages(prev => [...prev, errorMessage]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="h-screen w-screen flex flex-col tool-bg">
+                    <header className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between flex-shrink-0">
+                        <h1 className="text-lg font-bold text-white">{instance.instanceName}</h1>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-zinc-400">Logged in as: {user.username}</span>
+                            <button onClick={onLogout} className="px-3 py-1 text-sm bg-zinc-700 hover:bg-zinc-600 rounded-md">Logout</button>
+                        </div>
+                    </header>
+                    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-8">
+                        {messages.length === 0 && <div className="m-auto text-center text-zinc-500">Start the conversation!</div>}
+                        {messages.map((msg, index) => {
+                            const isLastMessage = index === messages.length - 1;
+                            const isStreaming = isLastMessage && isLoading;
+                            if (msg.role === 'user') {
+                                 return (
+                                    <div key={index} className="flex justify-end w-full animate-bubbleIn">
+                                        <div className="flex items-start gap-3 max-w-2xl">
+                                            <div className="bg-indigo-600 text-white px-4 py-3 rounded-2xl rounded-br-none">{msg.parts[0].text}</div>
+                                            <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center mt-1 chat-avatar-user font-bold">{user.username.charAt(0).toUpperCase()}</div>
+                                        </div>
+                                    </div>
+                                );
+                            }
+                             return (
+                                <div key={index} className="flex justify-start w-full animate-bubbleIn">
+                                     <div className="flex items-start gap-3 max-w-2xl">
+                                        <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center mt-1 chat-avatar-model"><Icon name="logo" className="w-6 h-6 text-indigo-300" /></div>
+                                        <div className={`group bg-zinc-800 text-white px-4 py-3 rounded-2xl rounded-bl-none ${isStreaming ? 'model-response-glowing' : ''}`}>
+                                             <ModelMessageBody content={msg.parts[0].text} isStreaming={isStreaming} />
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                         {isLoading && (messages.length === 0 || messages[messages.length - 1].role === 'user') && (
+                            <div className="flex justify-start w-full animate-bubbleIn">
+                                 <div className="flex items-start gap-3 max-w-2xl">
+                                    <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center mt-1 chat-avatar-model"><Icon name="logo" className="w-6 h-6 text-indigo-300" /></div>
+                                    <div className="bg-zinc-800 text-white px-4 py-3 rounded-2xl rounded-bl-none model-response-glowing"><Spinner /></div>
+                                </div>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+                    <form onSubmit={handleSendMessage} className="p-4 flex items-center gap-2 border-t border-zinc-800">
+                        <input type="text" value={input} onChange={e => setInput(e.target.value)} placeholder="Send a message..." className="flex-1 p-3 bg-zinc-800 rounded-lg border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white" />
+                        <button type="submit" disabled={isLoading || !input.trim()} className="p-3 bg-indigo-600 rounded-lg text-white disabled:bg-zinc-600"><Icon name="send" className="w-6 h-6"/></button>
+                    </form>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [instanceConfig, setInstanceConfig] = useState(null);
+            const [loggedInUser, setLoggedInUser] = useState(null);
+            
+            useEffect(() => {
+                const configElement = document.getElementById('instance-config');
+                if (configElement) {
+                    try {
+                        const config = JSON.parse(configElement.textContent);
+                        setInstanceConfig(config);
+                        document.title = `${config.instanceName} - YAN AI Instance`;
+                    } catch (e) {
+                        console.error("Failed to parse instance config:", e);
+                    }
+                }
+            }, []);
+            
+            if (!instanceConfig) {
+                return <div className="h-screen flex items-center justify-center">Loading instance...</div>;
+            }
+
+            if (!loggedInUser) {
+                return <LoginPage instance={instanceConfig} onLogin={setLoggedInUser} />;
+            }
+            
+            return <ChatPage instance={instanceConfig} user={loggedInUser} onLogout={() => setLoggedInUser(null)} />;
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+    </script>
+</body>
+</html>
